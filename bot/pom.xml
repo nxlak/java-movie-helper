@@ -11,6 +11,13 @@
     <artifactId>bot</artifactId>
 
     <dependencies>
+
+        <dependency>
+            <groupId>backend.academy</groupId>
+            <artifactId>scrapper</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
         <dependency>
             <groupId>com.github.pengrad</groupId>
             <artifactId>java-telegram-bot-api</artifactId>
@@ -111,6 +118,12 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>kafka</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>backend.academy</groupId>
+            <artifactId>scrapper</artifactId>
+            <version>1.0</version>
+            <scope>compile</scope>
         </dependency>
         <!--        <dependency>-->
         <!--            <groupId>org.springframework.kafka</groupId>-->

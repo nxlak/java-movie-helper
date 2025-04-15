@@ -2,9 +2,11 @@ package backend.academy.bot.Bot;
 
 import backend.academy.bot.BotConfig;
 import backend.academy.bot.BotState.BotState;
+import backend.academy.scrapper.DTO.MovieInfo;
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.UpdatesListener;
 import com.pengrad.telegrambot.model.Update;
+import com.pengrad.telegrambot.model.request.ParseMode;
 import com.pengrad.telegrambot.request.SendMessage;
 import com.pengrad.telegrambot.response.SendResponse;
 import jakarta.annotation.PostConstruct;
@@ -12,15 +14,22 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
 public class Bot {
 
     private final TelegramBot bot;
+
+    private final WebClient webClient;
 
     @Getter
     @Setter
@@ -30,8 +39,9 @@ public class Bot {
     private Map<Long, Map<String, String>> userFilters = new HashMap<>();
 
     @Autowired
-    public Bot(BotConfig botConfig) {
+    public Bot(BotConfig botConfig, WebClient webClient) {
         this.bot = new TelegramBot(botConfig.telegramToken());
+        this.webClient = webClient;
     }
 
     @PostConstruct
@@ -45,33 +55,70 @@ public class Bot {
     }
 
     private void handleFilmName(long chatId, String filmName) {
-        // Здесь логика поиска по названию
-
-        userState.put(chatId, BotState.IDLE);
+        webClient.get()
+            .uri("/films/{name}", filmName)
+            .retrieve()
+            .bodyToMono(new ParameterizedTypeReference<List<MovieInfo>>() {})
+            .subscribe(movies -> {
+                if (movies.isEmpty()) {
+                    sendMessage(chatId, "Фильмы не найдены.");
+                } else {
+                    movies.forEach(movie -> {
+                        String message = String.format(
+                            "🎬 *%s* (%d)\n\n" +
+                                "⭐ Рейтинг: %.1f\n" +
+                                "🎭 Жанры: %s\n" +
+                                "🌍 Страны: %s\n" +
+                                "📖 Описание: %s\n\n" +
+                                "🖼 [Постер](%s)",
+                            movie.getName(),
+                            movie.getYear(),
+                            movie.getRatingKp() != null ? movie.getRatingKp() : 0.0,
+                            String.join(", ", movie.getGenres()),
+                            String.join(", ", movie.getCountries()),
+                            movie.getDescription() != null ?
+                                movie.getDescription().substring(0, Math.min(200, movie.getDescription().length())) + "..." :
+                                "Нет описания",
+                            movie.getPosterUrl() != null ? movie.getPosterUrl() : ""
+                        );
+                        sendMessage(chatId, message);
+                    });
+                }
+                userState.put(chatId, BotState.IDLE);
+            }, error -> {
+                sendMessage(chatId, "❌ Ошибка поиска");
+                userState.put(chatId, BotState.IDLE);
+            });
     }
 
     private void handleFilterType(long chatId, String type) {
         Map<String, String> filters = userFilters.get(chatId);
         if (!"skip".equalsIgnoreCase(type)) {
             filters.put("type", type);
+        } else {
+            filters.remove("type");
         }
         userState.put(chatId, BotState.WAITING_FOR_YEAR);
-        sendMessage(chatId, "Введите год выпуска или skip:");
+        sendMessage(chatId, "Введите диапазон года выпуска (пример: 2014-2024) или skip:");
     }
 
     private void handleFilterYear(long chatId, String year) {
         Map<String, String> filters = userFilters.get(chatId);
         if (!"skip".equalsIgnoreCase(year)) {
             filters.put("year", year);
+        } else {
+            filters.remove("year");
         }
         userState.put(chatId, BotState.WAITING_FOR_RATING);
-        sendMessage(chatId, "Введите минимальный рейтинг (0-10) или skip:");
+        sendMessage(chatId, "Введите диапазон рейтинг (пример: 6-9) или skip:");
     }
 
     private void handleFilterRating(long chatId, String rating) {
         Map<String, String> filters = userFilters.get(chatId);
         if (!"skip".equalsIgnoreCase(rating)) {
             filters.put("rating", rating);
+        } else {
+            filters.remove("rating");
         }
         userState.put(chatId, BotState.WAITING_FOR_GENRE);
         sendMessage(chatId, "Введите жанр или skip:");
@@ -79,14 +126,56 @@ public class Bot {
 
     private void handleFilterGenre(long chatId, String genre) {
         Map<String, String> filters = userFilters.get(chatId);
-        if (!"skip".equalsIgnoreCase(genre)) {
-            filters.put("genre", genre);
+
+        if ("skip".equalsIgnoreCase(genre)) {
+            genre = null;
         }
 
-        sendMessage(chatId, "Ищем с параметрами:\n" + filters);
-
-        userState.put(chatId, BotState.IDLE);
-        userFilters.remove(chatId);
+        String finalGenre = genre;
+        webClient.get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/filter")
+                .queryParamIfPresent("type", Optional.ofNullable(filters.get("type")))
+                .queryParamIfPresent("year", Optional.ofNullable(filters.get("year")))
+                .queryParamIfPresent("rating", Optional.ofNullable(filters.get("rating")))
+                .queryParamIfPresent("genre", Optional.ofNullable(finalGenre))
+                .build())
+            .retrieve()
+            .bodyToMono(new ParameterizedTypeReference<List<MovieInfo>>() {})
+            .subscribe(movies -> {
+                if (movies.isEmpty()) {
+                    sendMessage(chatId, "По вашему запросу ничего не найдено 😔");
+                } else {
+                    movies.stream()
+                        .limit(5)
+                        .forEach(movie -> {
+                            String message = String.format(
+                                "🍿 *%s* (%d)\n\n" +
+                                    "⭐ Рейтинг: %.1f\n" +
+                                    "🎭 Жанры: %s\n" +
+                                    "🌍 Страны: %s\n" +
+                                    "📖 Описание: %s\n\n" +
+                                    "🖼 [Постер](%s)",
+                                movie.getName(),
+                                movie.getYear(),
+                                movie.getRatingKp() != null ? movie.getRatingKp() : 0.0,
+                                String.join(", ", movie.getGenres()),
+                                String.join(", ", movie.getCountries()),
+                                movie.getDescription() != null ?
+                                    movie.getDescription().substring(0, Math.min(200, movie.getDescription().length())) + "..." :
+                                    "Нет описания",
+                                movie.getPosterUrl() != null ? movie.getPosterUrl() : ""
+                            );
+                            sendMessage(chatId, message);
+                        });
+                }
+                userState.put(chatId, BotState.IDLE);
+                userFilters.remove(chatId);
+            }, error -> {
+                sendMessage(chatId, "❌ Ошибка фильтрации");
+                userState.put(chatId, BotState.IDLE);
+                userFilters.remove(chatId);
+            });
     }
 
     private void handleUpdate(Update update) {
@@ -129,7 +218,33 @@ public class Bot {
                 return;
             }
             case "/random" -> {
-                userState.put(chatId, BotState.IDLE);
+                webClient.get()
+                    .uri("/random")
+                    .retrieve()
+                    .bodyToMono(MovieInfo.class)
+                    .subscribe(movie -> {
+                        String message = String.format(
+                            "🎲 *Случайный фильм*\n\n" +
+                                "🎬 *%s* (%d)\n\n" +
+                                "⭐ Рейтинг: %.1f\n" +
+                                "🎭 Жанры: %s\n" +
+                                "🌍 Страны: %s\n" +
+                                "📖 Описание: %s\n\n" +
+                                "🖼 [Постер](%s)",
+                            movie.getName(),
+                            movie.getYear(),
+                            movie.getRatingKp() != null ? movie.getRatingKp() : 0.0,
+                            String.join(", ", movie.getGenres()),
+                            String.join(", ", movie.getCountries()),
+                            movie.getDescription() != null ?
+                                movie.getDescription().substring(0, Math.min(300, movie.getDescription().length())) + "..." :
+                                "Нет описания",
+                            movie.getPosterUrl() != null ? movie.getPosterUrl() : ""
+                        );
+                        sendMessage(chatId, message);
+                    }, error -> {
+                        sendMessage(chatId, "❌ Ошибка при получении случайного фильма");
+                    });
                 return;
             }
             default -> {
@@ -148,10 +263,12 @@ public class Bot {
     }
 
     public void sendMessage(long chatId, String text) {
-        SendMessage request = new SendMessage(chatId, text);
+        SendMessage request = new SendMessage(chatId, text)
+            .parseMode(ParseMode.Markdown)
+            .disableWebPagePreview(false);
         SendResponse response = bot.execute(request);
         if (!response.isOk()) {
-            System.out.println("Ошибка отправки сообщения в Telegram: {" + response.description() + "}");
+            System.out.println("Ошибка отправки сообщения: {" + response.description() + "}");
         }
     }
 

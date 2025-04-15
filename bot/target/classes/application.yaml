@@ -1,15 +1,16 @@
 app:
   telegram-token: ${TELEGRAM_TOKEN} # env variable
+  scrapper-base-url: http://localhost:8081
 
 spring:
   application:
     name: Bot
   liquibase:
     enabled: false
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
+#  jpa:
+#    hibernate:
+#      ddl-auto: validate
+#    open-in-view: false
 
 server:
   port: 8080

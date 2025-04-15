@@ -8,10 +8,12 @@ import backend.academy.scrapper.DTO.MovieResponse;
 import backend.academy.scrapper.ScrapperConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -191,27 +193,27 @@ public class ApiController {
         try {
 
             String baseUrl = "https://api.kinopoisk.dev/v1.4/movie?page=1&limit=5&notNullFields=name";
-            StringBuilder urlBuilder = new StringBuilder(baseUrl);
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl);
 
-            if (type != null && !type.isEmpty()) {
-
-                urlBuilder.append("&type="+switchType(type));
+            if (type != null && !type.isEmpty() && !"skip".equalsIgnoreCase(type)) {
+                builder.queryParam("type", switchType(type));
             }
-            if (year != null && !year.isEmpty()) {
-                urlBuilder.append("&year="+year);
+            if (year != null && !year.isEmpty() && !"skip".equalsIgnoreCase(year)) {
+                builder.queryParam("year", year);
             }
-            if (rating != null && !rating.isEmpty()) {
-                urlBuilder.append("&rating.kp="+rating);
+            if (rating != null && !rating.isEmpty() && !"skip".equalsIgnoreCase(rating)) {
+                builder.queryParam("rating.kp", rating);
             }
-            urlBuilder.append("&votes.kp=10000-1000000");
-            if (genre != null && !genre.isEmpty()) {
-                String encodedGenre = URLEncoder.encode(genre, StandardCharsets.UTF_8);
-                urlBuilder.append("&genres.name="+encodedGenre);
+            if (genre != null && !genre.isEmpty() && !"skip".equalsIgnoreCase(genre)) {
+                builder.queryParam("genres.name", URLEncoder.encode(genre.toLowerCase(), StandardCharsets.UTF_8));
             }
 
+            builder.queryParam("votes.kp", "10000-10000000");
+
+            String url = builder.build().toUriString();
 
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(String.valueOf(urlBuilder)))
+                .uri(URI.create(url))
                 .header("accept", "application/json")
                 .header("X-API-KEY", TOKEN)
                 .method("GET", HttpRequest.BodyPublishers.noBody())
