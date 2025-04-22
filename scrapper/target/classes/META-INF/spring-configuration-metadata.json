@@ -1,0 +1,17 @@
+{
+  "groups": [
+    {
+      "name": "app",
+      "type": "backend.academy.scrapper.ScrapperConfig",
+      "sourceType": "backend.academy.scrapper.ScrapperConfig"
+    }
+  ],
+  "properties": [
+    {
+      "name": "app.kinopoisk-token",
+      "type": "java.lang.String",
+      "sourceType": "backend.academy.scrapper.ScrapperConfig"
+    }
+  ],
+  "hints": []
+}

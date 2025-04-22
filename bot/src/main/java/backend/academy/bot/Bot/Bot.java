@@ -17,10 +17,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import org.springframework.web.util.UriBuilder;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -127,10 +128,18 @@ public class Bot {
     private void handleFilterGenre(long chatId, String genre) {
         Map<String, String> filters = userFilters.get(chatId);
 
-        if ("skip".equalsIgnoreCase(genre)) {
-            genre = null;
+        if (!"skip".equalsIgnoreCase(genre)) {
+            filters.put("genre", genre);
+        }
+        else {
+            filters.remove("genre");
         }
 
+
+        sendMessage(chatId, "Введите страну, снявшую фильм, либо skip:");
+        userState.put(chatId, BotState.WAITING_FOR_COUNTRY);
+
+        /*
         String finalGenre = genre;
         webClient.get()
             .uri(uriBuilder -> uriBuilder
@@ -176,6 +185,76 @@ public class Bot {
                 userState.put(chatId, BotState.IDLE);
                 userFilters.remove(chatId);
             });
+         */
+    }
+
+    private void handleFilterCountry(long chatId, String country) {
+        /*
+        // Разделяем строку стран по запятым, убираем пробелы, фильтруем пустые
+        List<String> countriesList = Arrays.stream(country.split("\\s*,\\s*"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+        */
+
+        Map<String, String> filters = userFilters.get(chatId);
+
+        if (!"skip".equalsIgnoreCase(country)) {
+            filters.put("country", country);
+        }
+        else {
+            filters.remove("country");
+        }
+
+        webClient.get()
+                .uri(uriBuilder -> {
+                    UriBuilder builder = uriBuilder.path("/filter")
+                            .queryParamIfPresent("type", Optional.ofNullable(filters.get("type")))
+                            .queryParamIfPresent("year", Optional.ofNullable(filters.get("year")))
+                            .queryParamIfPresent("rating", Optional.ofNullable(filters.get("rating")))
+                            .queryParamIfPresent("genre", Optional.ofNullable(filters.get("genre")))
+                            .queryParamIfPresent("country", Optional.ofNullable(filters.get("country")));
+
+                    //countriesList.forEach(c -> builder.queryParam("countries.name", c));
+
+                    return builder.build();
+                })
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<List<MovieInfo>>() {})
+                .subscribe(movies -> {
+                    if (movies.isEmpty()) {
+                        sendMessage(chatId, "По вашему запросу ничего не найдено 😔");
+                    } else {
+                        movies.stream()
+                                .limit(5)
+                                .forEach(movie -> {
+                                    String message = String.format(
+                                            "🍿 *%s* (%d)\n\n" +
+                                                    "⭐ Рейтинг: %.1f\n" +
+                                                    "🎭 Жанры: %s\n" +
+                                                    "🌍 Страны: %s\n" +
+                                                    "📖 Описание: %s\n\n" +
+                                                    "🖼 [Постер](%s)",
+                                            movie.getName(),
+                                            movie.getYear(),
+                                            movie.getRatingKp() != null ? movie.getRatingKp() : 0.0,
+                                            String.join(", ", movie.getGenres()),
+                                            String.join(", ", movie.getCountries()),
+                                            movie.getDescription() != null ?
+                                                    movie.getDescription().substring(0, Math.min(200, movie.getDescription().length())) + "..." :
+                                                    "Нет описания",
+                                            movie.getPosterUrl() != null ? movie.getPosterUrl() : ""
+                                    );
+                                    sendMessage(chatId, message);
+                                });
+                    }
+                    userState.put(chatId, BotState.IDLE);
+                    userFilters.remove(chatId);
+                }, error -> {
+                    sendMessage(chatId, "❌ Ошибка при поиске фильмов");
+                    userState.put(chatId, BotState.IDLE);
+                    userFilters.remove(chatId);
+                });
     }
 
     private void handleUpdate(Update update) {
@@ -255,6 +334,7 @@ public class Bot {
                     case WAITING_FOR_YEAR -> handleFilterYear(chatId, messageText);
                     case WAITING_FOR_RATING -> handleFilterRating(chatId, messageText);
                     case WAITING_FOR_GENRE -> handleFilterGenre(chatId, messageText);
+                    case WAITING_FOR_COUNTRY -> handleFilterCountry(chatId, messageText);
                     default -> sendMessage(chatId, "Неизвестная команда! Используйте /help");
                 }
             }

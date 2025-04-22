@@ -72,7 +72,7 @@ public class ApiController {
     public List<MovieInfo> findByName(@PathVariable String name) {
         try {
             String encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8);
-            String req = "https://api.kinopoisk.dev/v1.4/movie/search?page=1&limit=3&query=" + encodedName;
+            String req = "https://api.kinopoisk.dev/v1.4/movie/search?page=1&limit=1&query=" + encodedName;
 
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(req))
@@ -184,7 +184,7 @@ public class ApiController {
     }
 
     @GetMapping("/filter")
-    public List<MovieInfo> findFromFilters(
+    public List<MovieInfo> findFromFilters(@RequestParam(required = false) String country,
         @RequestParam(required = false) String genre,
         @RequestParam(required = false) String year,
         @RequestParam(required = false) String rating,
@@ -192,11 +192,15 @@ public class ApiController {
 
         try {
 
-            String baseUrl = "https://api.kinopoisk.dev/v1.4/movie?page=1&limit=5&notNullFields=name";
+            String baseUrl = "https://api.kinopoisk.dev/v1.4/movie?page=2&limit=5&notNullFields=name";
             UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl);
 
             if (type != null && !type.isEmpty() && !"skip".equalsIgnoreCase(type)) {
                 builder.queryParam("type", switchType(type));
+            }
+            else {
+                builder.queryParam("type", "movie");
+                builder.queryParam("type", "tv-series");
             }
             if (year != null && !year.isEmpty() && !"skip".equalsIgnoreCase(year)) {
                 builder.queryParam("year", year);
@@ -204,11 +208,15 @@ public class ApiController {
             if (rating != null && !rating.isEmpty() && !"skip".equalsIgnoreCase(rating)) {
                 builder.queryParam("rating.kp", rating);
             }
+
+            builder.queryParam("votes.kp", "10000-10000000");
+
             if (genre != null && !genre.isEmpty() && !"skip".equalsIgnoreCase(genre)) {
                 builder.queryParam("genres.name", URLEncoder.encode(genre.toLowerCase(), StandardCharsets.UTF_8));
             }
-
-            builder.queryParam("votes.kp", "10000-10000000");
+            if (country != null && !country.isEmpty() && !"skip".equalsIgnoreCase(country)) {
+                builder.queryParam("countries.name", URLEncoder.encode(country, StandardCharsets.UTF_8));
+            }
 
             String url = builder.build().toUriString();
 
