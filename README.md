@@ -1,50 +1,50 @@
 # Java Movie Helper
 
-Проект **Java Movie Helper** представляет собой систему для поиска и рекомендаций фильмов и сериалов в Telegram. Состоит из двух модулей:
+The **Java Movie Helper** project is a system for searching and recommending movies and TV shows via Telegram. It consists of two modules:
 
-* **scrapper** – REST API сервис на Spring Boot, взаимодействующий с API Kinopoisk и обрабатывающий данные о фильмах
-* **bot** – Telegram-бот на Spring Boot и библиотеке `com.pengrad.telegrambot`, предоставляющий удобный чат-интерфейс для пользователей
+* **scrapper** – A Spring Boot REST API service that interacts with the Kinopoisk API and processes movie data
+* **bot** – A Telegram bot built with Spring Boot and the `com.pengrad.telegrambot` library, providing a user-friendly chat interface
 
-## Начало работы
+## Getting Started
 
-### 1. Клонировать репозиторий
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/nxlak/java-movie-helper
 cd java-movie-helper
-````
+```
 
-### 2. Настроить переменные окружения
+### 2. Set Environment Variables
 
-* `KINOPOISK_TOKEN` – ваш API-ключ Kinopoisk
-* `TELEGRAM_TOKEN`  – токен вашего Telegram-бота
+* `KINOPOISK_TOKEN` – your Kinopoisk API key
+* `TELEGRAM_TOKEN`  – your Telegram bot token
 
-### 3. Сборка и запуск
+### 3. Build and Run
 
-Собрать оба модуля и прогнать тесты:
+To build both modules and run tests:
 
 ```bash
 ./mvnw clean verify
 ```
 
-Запустить модули по отдельности:
+To run the modules separately:
 
 ```bash
-# Запуск scrapper (порт 8081)
+# Start scrapper (port 8081)
 cd scrapper
 ../mvnw spring-boot:run
 
-# В другом терминале: запуск bot (порт 8080)
+# In another terminal: start bot (port 8080)
 cd ../bot
 ../mvnw spring-boot:run
 ```
 
-## Использование Telegram-бота
+## Using the Telegram Bot
 
-В боте доступны команды:
+The bot supports the following commands:
 
-- `/start`   – регистрация и приветствие
-- `/help`    – вывести список команд
-- `/title`   – поиск по названию фильма/сериала
-- `/filters` – поиск с параметрами (тип, год, рейтинг, жанр, страна)
-- `/random`  – получить случайную рекомендацию
+* `/start`   – register and get a welcome message
+* `/help`    – display the list of available commands
+* `/title`   – search by movie/TV show title
+* `/filters` – search with filters (type, year, rating, genre, country)
+* `/random`  – get a random recommendation
